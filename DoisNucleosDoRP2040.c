@@ -14,9 +14,7 @@
 #define I2C_SCL 1
 
 // Para o sensor de luz BH1750. Endereço 0x23
-#define I2C_PORT2 i2c1               // i2c0 pinos 0 e 1, i2c1 pinos 2 e 3
-#define I2C_SDA2 2                   // 0 ou 2
-#define I2C_SCL2 3                   // 1 ou 3
+#define I2C_PORT2 i2c1 // i2c0 pinos 0 e 1, i2c1 pinos 2 e 3
 
 // Display na I2C
 #define I2C_PORT_DISP i2c1
@@ -29,6 +27,8 @@
 
 char str_dist[16];
 char str_lux[10];
+uint16_t distance2 = 0;
+uint16_t lux2 = 0;
 uint16_t distance = 0;
 uint16_t lux = 0;
 
@@ -37,39 +37,22 @@ void core1_entry()
 {
     while (1)
     {
+
         // Leitura do sensor de Distância VL53L0X
-        distance = vl53l0x_read_range(I2C_PORT);
+        distance2 = vl53l0x_read_range(I2C_PORT);
+        printf("passei no nucleo 1");
         printf("Distancia = %d mm\n", distance);
 
         sprintf(str_dist, "%d mm", distance);
 
-
         // Leitura do sensor de Luz BH1750
-        lux = bh1750_read_measurement(I2C_PORT2);
+        lux2 = bh1750_read_measurement(I2C_PORT_DISP);
         printf("Lux = %d\n", lux);
 
- 
-        sprintf(str_lux, "%d Lux", lux);  // Converte o inteiro em string
-        sleep_ms(1);
+        sprintf(str_lux, "%d Lux", lux); // Converte o inteiro em string
+
+        sleep_ms(50);
     }
-}
-
-void inicBH1750(){
-    gpio_pull_up(I2C_SDA2);
-    gpio_pull_up(I2C_SCL2);
-    // Inicializa o sensor de luz BH1750
-    bh1750_power_on(I2C_PORT2);
-}
-
-// I2C0 para o sensor VL53L0X
-void inicVL53L0X(){
-    i2c_init(I2C_PORT, 100 * 1000); // VL53L0X pode ser mais lento
-    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
-    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
-    gpio_pull_up(I2C_SDA);
-    gpio_pull_up(I2C_SCL);
-    // Inicializa o sensor VL53L0X
-    vl53l0x_init(I2C_PORT);
 }
 
 // Trecho para modo BOOTSEL com botão B
@@ -94,12 +77,8 @@ int main()
     gpio_init(LED_AZUL);
     gpio_set_dir(LED_AZUL, GPIO_OUT);
 
-    // Inicia o Core 1
-    multicore_launch_core1(core1_entry);
-
     stdio_init_all();
 
-    
     i2c_init(I2C_PORT_DISP, 400 * 1000);
     gpio_set_function(I2C_SDA_DISP, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL_DISP, GPIO_FUNC_I2C);
@@ -112,31 +91,49 @@ int main()
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
 
-    inicVL53L0X();
-    inicBH1750();
+    i2c_init(I2C_PORT, 100 * 1000); // VL53L0X pode ser mais lento
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA);
+    gpio_pull_up(I2C_SCL);
+    // Inicializa o sensor VL53L0X
+    vl53l0x_init(I2C_PORT);
 
+    // Inicializa o sensor de luz BH1750
+    bh1750_power_on(I2C_PORT_DISP);
+
+    // Inicia o Core 1
+    multicore_launch_core1(core1_entry);
 
     while (1)
     {
+        distance = distance2;
+        lux = lux2;
         // Atualiza o display
         ssd1306_fill(&ssd, false);
         ssd1306_rect(&ssd, 3, 3, 122, 60, true, false);
-        ssd1306_draw_string(&ssd, "Sensor VL53L0X:", 0, 0);
-        ssd1306_draw_string(&ssd, str_dist, 0, 16);
-        ssd1306_draw_string(&ssd, "Sensor  BH1750:", 0, 32);// Desenha uma string
-        ssd1306_draw_string(&ssd, str_lux, 0, 48);         // Desenha uma string
+        ssd1306_draw_string(&ssd, "Sensor VL53L0X:", 4, 4);
+        ssd1306_draw_string(&ssd, str_dist, 4, 17);
+        ssd1306_draw_string(&ssd, "Sensor  BH1750:", 4, 28); // Desenha uma string
+        ssd1306_draw_string(&ssd, str_lux, 4, 43);           // Desenha uma string
         ssd1306_send_data(&ssd);
 
-        if(distance < 100){
-           gpio_put(LED_VERDE, 1); 
-        }else{
-            gpio_put(LED_VERDE, 0); 
+        if (distance < 100)
+        {
+            gpio_put(LED_VERDE, 1);
         }
-        if(lux < 40){
-           gpio_put(LED_AZUL, 1); 
-        }else{
-            gpio_put(LED_AZUL, 0); 
+        else
+        {
+            gpio_put(LED_VERDE, 0);
         }
-        sleep_ms(1);
+        if (lux < 2000)
+        {
+            gpio_put(LED_AZUL, 1);
+        }
+        else
+        {
+            gpio_put(LED_AZUL, 0);
+        }
+        sleep_ms(50);
     }
 }
